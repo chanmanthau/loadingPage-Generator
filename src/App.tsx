@@ -13,6 +13,24 @@ import buildHtmlStr from "../utils/generateHtml"
 type AssetKey = "icon" | "btn" | "banner" | "title" | "word";
 type Asset = { key: AssetKey; name: string; hint: string; image: string };
 
+const getAssetKey = (filename: string): AssetKey => {
+  const name = filename.toLowerCase();
+  if (name.includes("icon")) return "icon";
+  if (name.includes("btn")) return "btn";
+  if (name.includes("img")) return "banner";
+  if (name.includes("word")) return "word";
+  return "title";
+};
+
+
+const readAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
 const assetDetails: Omit<Asset, "image">[] = [
   { key: "icon", name: "应用图标", hint: "文件名包含 icon" },
   { key: "btn", name: "按钮图片", hint: "文件名包含 btn" },
@@ -39,24 +57,37 @@ function App() {
   const completedCount = assets.filter((asset) => asset.image).length;
   const progress = (completedCount / assets.length) * 100;
 
-  const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const filename = file.name.toLowerCase();
-    const key: AssetKey = filename.includes("icon")
-      ? "icon"
-      : filename.includes("btn")
-        ? "btn"
-        : filename.includes("img")
-          ? "banner"
-          : filename.includes("word")
-            ? "word"
-            : "title";
-    const reader = new FileReader();
-    reader.onload = () =>
-      setImages((current) => ({ ...current, [key]: reader.result as string }));
-    reader.readAsDataURL(file);
+  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
     e.target.value = "";
+
+    const titleFile = [...files]
+      .reverse()
+      .find((file) => getAssetKey(file.name) === "title");
+    if (titleFile) {
+      setHtmlName(titleFile.name.replace(/@2x\.png$/i, ""));
+    }
+
+    try {
+      const uploadedImages = await Promise.all(
+        files.map(async (file) => ({
+          key: getAssetKey(file.name),
+          image: await readAsDataUrl(file),
+        })),
+      );
+
+      setImages((current) => {
+        const next = { ...current };
+        uploadedImages.forEach(({ key, image }) => {
+          next[key] = image;
+        });
+        return next;
+      });
+    } catch {
+      window.alert("部分图片读取失败，请重新选择后上传。");
+    }
   };
 
   const handleGenerateHtml = () => {
@@ -127,7 +158,7 @@ function App() {
                 <ImageIcon className="size-6" />
               </span>
               <span className="mt-4 font-semibold text-slate-700">
-                选择一张图片上传
+                选择一张或多张图片
               </span>
               <span className="mt-1 text-sm text-slate-400">
                 图片会依据文件名自动分配
@@ -137,6 +168,7 @@ function App() {
               ref={inputRef}
               type="file"
               accept="image/*"
+              multiple
               onChange={handleUploadImage}
               className="hidden"
             />
@@ -149,7 +181,7 @@ function App() {
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
+                  className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -228,7 +260,7 @@ function App() {
               onChange={(e) => setBackgroundColor(e.target.value)}
               placeholder="#F8FAFC"
               spellCheck={false}
-              className="mt-3 h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-sm uppercase text-slate-900 outline-none transition placeholder:normal-case placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100 sm:w-36"
+              className="mt-3 h-10.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-sm uppercase text-slate-900 outline-none transition placeholder:normal-case placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100 sm:w-36"
             />
           </div>
         </div>
